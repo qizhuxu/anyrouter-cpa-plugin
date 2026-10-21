@@ -384,7 +384,7 @@ curl -X POST http://127.0.0.1:8317/v8/management/plugins/store/anyrouter/install
 git tag -a v0.1.0 -m "anyrouter 0.1.0" && git push origin v0.1.0
 ```
 
-tag 触发 `.github/workflows/release.yml`：5 个平台矩阵构建（linux/amd64、linux/arm64 用 `aarch64-linux-gnu-gcc` 交叉编译；windows/amd64 用 MSYS2 的 **MinGW-W64**——刻意避开会链出无法加载 DLL 的 TDM-GCC；darwin/arm64 与 darwin/amd64 分别在 macOS runner 上）→ 每个平台跑单测并打包 → 汇总 `checksums.txt` → 校验版本一致性 → 生成 GitHub Release。`ci.yml` 在推分支/PR 时跑 `gofmt`、`go vet`、`go test`（CGO 关闭）与商店契约校验。
+tag 触发 `.github/workflows/release.yml`：矩阵构建 linux/amd64、linux/arm64（`aarch64-linux-gnu-gcc` 交叉编译，交叉目标只编译不跑测试）、windows/amd64（MSYS2 的 **MinGW-W64**——刻意避开会链出无法加载 DLL 的 TDM-GCC）、darwin/arm64（macOS runner，原生跑测试）；**darwin/amd64 暂缺**，它需要 Intel macOS runner（`macos-13`，上游正在退役、长期排队），矩阵里留了位置与说明，补上时构建逻辑不用改→ 每个平台跑单测并打包 → 汇总 `checksums.txt` → 校验版本一致性 → 生成 GitHub Release。`ci.yml` 在推分支/PR 时跑 `gofmt`、`go vet`、`go test`（CGO 关闭）与商店契约校验。
 
 **自检工具**（都可以在本地跑）：
 
