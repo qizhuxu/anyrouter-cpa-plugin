@@ -325,3 +325,30 @@ zip 根目录直接放 `anyrouter.dll`（不能带子目录），`checksums.txt`
 | 面板显示“用户 ID（自动推导）”但数值不对 | 说明站点换了会话格式，按上一行手填正确值即可（手填值优先） |
 | 容器里跑 CPA，宿主机访问管理 API 返回 `403 remote management disabled` | `management.allow-remote` 默认 `false`，宿主经 Docker 网桥被视作远端；在容器用的配置里设为 `true`。面板资源页不受影响，照常能打开 |
 | 容器/云主机上签到时间不对 | 宿主是 UTC 时 `timezone: Local` 会把 `08:00` 当 UTC；显式写 `timezone: "Asia/Shanghai"` |
+
+## 12. 服务器部署与更新（GitHub 流程）
+
+本地工作区源码 → GitHub → 服务器拉取构建。三处（工作区 / GitHub / 服务器）保持一致的唯一真相是仓库的 `main` 分支。
+
+**一次性准备（服务器）**：
+
+```bash
+git clone https://github.com/<owner>/<repo>.git ~/anyrouter-cpa-src
+mkdir -p ~/anyrouter-cpa/{plugins,auths}          # 部署目录：config.yaml / plugins / auths
+cp ~/anyrouter-cpa-src/scripts/deploy_linux.sh ~/anyrouter-cpa/
+```
+
+**每次更新（服务器一条命令）**：
+
+```bash
+cd ~/anyrouter-cpa
+REPO_URL=https://github.com/<owner>/<repo>.git ./deploy_linux.sh
+```
+
+脚本依次做四件事：`git fetch` + `pull --ff-only` 拉取最新源码 → `CGO_ENABLED=0 go test ./...` → `CGO_ENABLED=1` 构建 `anyrouter.so` 并 `dlopen` 自检 → 安装到 `plugins/` 后 `docker restart`，最后打印 `plugin registered` 日志。环境变量 `SRC_DIR` / `DEPLOY_DIR` / `CONTAINER` / `BRANCH` / `SKIP_TESTS` 可覆盖默认值（默认 `~/anyrouter-cpa-src`、`~/anyrouter-cpa`、`anyrouter-cpa`、`main`），换过 remote 的旧克隆会自动同步到 `REPO_URL`。
+
+三条约定：
+
+- **仓库不放二进制**（`.gitignore` 排除 `dist/`、`*.so`、`*.dll`）：服务器自己构建，避免"产物与源码不一致"。
+- **`.gitattributes` 强制 LF**：Windows 上提交的 `.sh` 若带 CRLF，在 Linux 上会直接执行失败。
+- **部署目录的 `config.yaml` 不进仓库**：里面是管理密钥、端口与路径差异；插件配置以仓库的 `config.example.yaml` 为模板。面板托管的自动任务设置写在插件状态文件（容器里指向挂载的 `plugins/`），同样不属于源码。
