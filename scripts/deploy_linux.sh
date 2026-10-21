@@ -31,6 +31,13 @@ command -v gcc >/dev/null 2>&1 || { echo "gcc not found (cgo build needs a C too
 
 echo "== fetch =="
 if [ -d "$SRC_DIR/.git" ]; then
+  # Keep the checkout pointing at the requested repository: an earlier dry run or
+  # a moved remote would otherwise keep pulling from the old URL.
+  current_remote="$(git -C "$SRC_DIR" remote get-url origin 2>/dev/null || true)"
+  if [ "$current_remote" != "$REPO_URL" ]; then
+    echo "   remote $current_remote -> $REPO_URL"
+    git -C "$SRC_DIR" remote set-url origin "$REPO_URL"
+  fi
   git -C "$SRC_DIR" fetch --all --prune
   git -C "$SRC_DIR" checkout "$BRANCH"
   git -C "$SRC_DIR" pull --ff-only
