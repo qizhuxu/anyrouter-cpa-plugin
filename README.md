@@ -378,6 +378,22 @@ curl -X POST http://127.0.0.1:8317/v8/management/plugins/store/anyrouter/install
   -H "Authorization: Bearer $MANAGEMENT_KEY"
 ```
 
+**验收记录（真实实例从商店安装）**：在一个干净的 CPA 实例（`plugins/` 为空）里把本仓库的 registry 加进 `plugins.store-sources` 后——
+
+```
+GET  /v8/management/plugins/store
+  sources: ["official", "source-3a407247e0bf"]
+  entry:   {"id":"anyrouter","version":"0.1.0","installed":false,"store_id":"source-3a407247e0bf/anyrouter"}
+
+POST /v8/management/plugins/store/anyrouter/install
+  {"status":"installed","source_name":"raw.githubusercontent.com","install_type":"github-release",
+   "version":"0.1.0","path":"plugins/linux/amd64/anyrouter-v0.1.0.so","restart_required":false}
+
+之后：plugins 列表 registered=true effective=true；面板资源页 200（51914 字节）；
+      日志 `pluginstore: plugin installed` + `plugin registered`（无需重启即热加载）
+```
+
+`scripts/store_check` 在 Windows/amd64、linux/amd64、linux/arm64 三个目标上也都 PASSED（宿主客户端自行选包、校验 checksum、解包）。
 **发版**：改 `main.go` 的 `pluginVersion` 与 `registry.json` 的 `version`（CI 会校验两者与 tag 一致），然后
 
 ```bash
