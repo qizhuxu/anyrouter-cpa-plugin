@@ -21,13 +21,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # native builds can run the unit tests; the cross build only compiles
+          # Every entry runs on Linux or macOS; the two non-native targets are
+          # cross-compiled with cgo (Go supports that with a cross gcc), so no
+          # Windows shell setup is involved. Tests run only where the produced
+          # test binary can execute (a cross-built binary cannot).
           - { goos: linux,   goarch: amd64, runner: ubuntu-latest, test: true,  python: python3 }
-          - { goos: linux,   goarch: arm64, runner: ubuntu-latest, test: false, python: python3, cc: aarch64-linux-gnu-gcc }
-          - { goos: windows, goarch: amd64, runner: windows-latest, test: true, python: python, mingw: true }
-          - { goos: darwin,  goarch: arm64, runner: macos-latest, test: true,  python: python3 }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-latest, test: false, python: python3,
+              cc: aarch64-linux-gnu-gcc,           apt: gcc-aarch64-linux-gnu }
+          - { goos: windows, goarch: amd64, runner: ubuntu-latest, test: false, python: python3,
+              cc: x86_64-w64-mingw32-gcc,          apt: gcc-mingw-w64-x86-64 }
+          - { goos: darwin,  goarch: arm64, runner: macos-latest,  test: true,  python: python3 }
           # darwin/amd64 needs an Intel macOS runner (macos-13), which is being
-          # retired upstream; add it back as a matrix entry once capacity is
+          # retired upstream; add it back as an entry here once capacity is
           # reliable - the build itself needs no changes.
     steps:
       - uses: actions/checkout@v4
@@ -37,45 +42,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install the aarch64 cross toolchain
-        if: matrix.cc == 'aarch64-linux-gnu-gcc'
+      - name: Install the cross toolchain
+        if: matrix.apt != ''
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      # MinGW-W64 from MSYS2. Do not use TDM-GCC for c-shared: it links images
-      # that Windows refuses to load (ERROR_BAD_EXE_FORMAT).
-      - name: Set up MinGW-W64
-        if: matrix.mingw
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: false
-          install: mingw-w64-x86_64-gcc
-
-      # The MSYS2 shell puts MINGW64's gcc on PATH for cgo. Tests run only for
-      # native targets: a cross-built test binary cannot execute here.
-      - name: Build the plugin
-        if: matrix.mingw
-        shell: msys2 {0}
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          set -euo pipefail
-          export CGO_ENABLED=1
-          gcc --version | head -1
-          go version
-          if [ "${{ matrix.test }}" = "true" ]; then
-            ( unset GOOS GOARCH; CGO_ENABLED=1 go test -count=1 ./... )
-          fi
-          mkdir -p dist
-          go build -buildmode=c-shared -trimpath -ldflags "-s -w" -o dist/anyrouter.dll .
-          rm -f dist/*.h
-          ls -l dist
+          sudo apt-get install -y ${{ matrix.apt }}
 
       - name: Build the plugin
-        if: ${{ !matrix.mingw }}
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -84,10 +57,13 @@ jobs:
         run: |
           set -euo pipefail
           export CGO_ENABLED=1
-          if [ -n "${CROSS_CC}" ]; then export CC="${CROSS_CC}"; fi
+          if [ -n "${CROSS_CC}" ]; then
+            export CC="${CROSS_CC}"
+          fi
           echo "CC=${CC:-default}"
           go version
           if [ "${{ matrix.test }}" = "true" ]; then
+            # Native target: run the unit tests with the native toolchain.
             ( unset GOOS GOARCH; CGO_ENABLED=1 go test -count=1 ./... )
           fi
           mkdir -p dist
