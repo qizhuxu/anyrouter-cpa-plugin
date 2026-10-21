@@ -13,7 +13,9 @@
 // not become part of the plugin build.
 //
 //	go run . --registry https://raw.githubusercontent.com/qizhuxu/anyrouter-cpa-plugin/main/registry.json
-//	go run . --goos linux --goarch arm64        # check another platform's asset
+//	go run . --goos linux --goarch arm64           # check another platform's asset
+//	go run . --proxy http://127.0.0.1:10808        # same as CPA: the store fetch honours requests.proxy-url
+//	go run . --registry http://127.0.0.1:8899/registry.json --allow-insecure   # offline check
 package main
 
 import (
@@ -24,9 +26,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginstore"
@@ -39,20 +43,57 @@ func main() {
 	goos := flag.String("goos", runtime.GOOS, "target GOOS for asset selection")
 	goarch := flag.String("goarch", runtime.GOARCH, "target GOARCH for asset selection")
 	timeout := flag.Duration("timeout", 3*time.Minute, "overall timeout")
+	proxyURL := flag.String("proxy", "", "HTTP(S) proxy for registry and release requests (CPA uses requests.proxy-url here)")
+	allowInsecure := flag.Bool("allow-insecure", false, "allow a plain http registry URL on loopback (offline checks only)")
 	flag.Parse()
 
-	if errRun := run(*registryURL, *pluginID, *installDir, *goos, *goarch, *timeout); errRun != nil {
+	httpClient, errClient := buildHTTPClient(*proxyURL)
+	if errClient != nil {
+		fmt.Fprintf(os.Stderr, "store check FAILED: %v\n", errClient)
+		os.Exit(1)
+	}
+	var auth []pluginstore.AuthConfig
+	if *allowInsecure {
+		auth = []pluginstore.AuthConfig{{
+			Match:         *registryURL,
+			ApplyTo:       []string{pluginstore.RequestKindRegistry, pluginstore.RequestKindMetadata, pluginstore.RequestKindArtifact},
+			Type:          pluginstore.AuthTypeNone,
+			AllowInsecure: true,
+		}}
+	}
+
+	if errRun := run(httpClient, *registryURL, *pluginID, *installDir, *goos, *goarch, *timeout, auth); errRun != nil {
 		fmt.Fprintf(os.Stderr, "store check FAILED: %v\n", errRun)
 		os.Exit(1)
 	}
 	fmt.Println("store check PASSED")
 }
 
-func run(registryURL, pluginID, installDir, goos, goarch string, timeout time.Duration) error {
+// buildHTTPClient mirrors the host: the store client is built with the
+// configured upstream proxy, so an explicit --proxy is the faithful test.
+func buildHTTPClient(proxyURL string) (*http.Client, error) {
+	transport := &http.Transport{
+		MaxIdleConns:        8,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 20 * time.Second,
+		ForceAttemptHTTP2:   true,
+	}
+	value := strings.TrimSpace(proxyURL)
+	if value != "" {
+		parsed, errParse := url.Parse(value)
+		if errParse != nil {
+			return nil, fmt.Errorf("parse proxy: %w", errParse)
+		}
+		transport.Proxy = http.ProxyURL(parsed)
+	}
+	return &http.Client{Timeout: 2 * time.Minute, Transport: transport}, nil
+}
+
+func run(httpClient *http.Client, registryURL, pluginID, installDir, goos, goarch string, timeout time.Duration, auth []pluginstore.AuthConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	client := pluginstore.NewClient(http.DefaultClient, registryURL)
+	client := pluginstore.NewClientWithAuth(httpClient, registryURL, auth)
 
 	fmt.Printf("registry : %s\n", registryURL)
 	registry, errFetch := client.FetchRegistry(ctx)

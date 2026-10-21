@@ -391,7 +391,9 @@ tag 触发 `.github/workflows/release.yml`：矩阵构建 linux/amd64、linux/ar
 | 命令 | 作用 |
 |---|---|
 | `python scripts/validate_registry.py` | 按上面的契约校验 registry.json 与 `dist/*.zip`（命名、库在根目录、checksums 一致性） |
-| `cd scripts/store_check && go run . --goos linux --goarch arm64` | 用**宿主自己的商店客户端**（`sdk/pluginstore`）拉 registry、解析最新 release、下载并按平台选包、校验 checksum、装到临时目录——与用户在商店点"安装"走的是同一段代码 |
+| `cd scripts/store_check && go run . --goos linux --goarch arm64` | 用**宿主自己的商店客户端**（`sdk/pluginstore`）拉 registry、解析最新 release、下载并按平台选包、校验 checksum、装到临时目录——与用户在商店点"安装"走的是同一段代码。加 `--proxy http://127.0.0.1:10808` 复现宿主的代理行为（见下） |
 | `REPO_URL=… ./scripts/deploy_linux.sh` | 服务器一键重拉重部署（见上一节） |
 
 License: MIT（见 `LICENSE`）。
+
+**国内网络注意**：CPA 的商店客户端是带代理的（`internal/api/handlers/management/plugin_store.go` 把 `requests.proxy-url` 作为 `NetworkScope` 传给 `sdk/pluginstore`），所以**在 CPA 里配好 `requests.proxy-url` 后，商店拉取 registry 与发行包都会走代理**。`scripts/store_check` 的 `--proxy` 就是复现这一行为；不配代理时 `raw.githubusercontent.com` 在部分网络会被重置，报 `wsarecv: An existing connection was forcibly closed`。`store-sources` 也可以指向镜像（如 jsDelivr 的 `https://cdn.jsdelivr.net/gh/<owner>/<repo>@main/registry.json`），但发行包仍需从 GitHub 下载。
