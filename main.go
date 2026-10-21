@@ -11,7 +11,7 @@ import (
 const (
 	pluginID      = "anyrouter"
 	pluginVersion = "0.1.0"
-	pluginAuthor  = "anyrouter-plugin"
+	pluginAuthor  = "qizhuxu"
 	// pluginRepo must not be empty: the host rejects a registration whose
 	// metadata carries no repository URL (internal/pluginhost validPlugin).
 	pluginRepo  = "https://github.com/qizhuxu/anyrouter-cpa-plugin"

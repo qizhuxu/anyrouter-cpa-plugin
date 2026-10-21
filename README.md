@@ -58,7 +58,7 @@ anyrouter-plugin/
 │                           verify_challenge_node.js（跨引擎校验）/ probe_anyrouter.js（端点探测）
 ├── docs/                   面板截图、录屏、三秒测试缩略图（review/）、评审记录（ui-review.md）与 Linux 测试记录（linux-test.md）
 ├── config.example.yaml     配置示例
-├── registry.json           商店清单（发布前把 OWNER 换成你的账号）
+├── registry.json           商店清单（已指向本仓库）
 └── Makefile
 ```
 
@@ -262,7 +262,7 @@ pwsh -File scripts\verify_live.ps1 -BaseUrl http://127.0.0.1:8319 -Key anyrouter
 python scripts\build_release.py     # 产出 dist/anyrouter_0.1.0_windows_amd64.zip + checksums.txt
 ```
 
-zip 根目录直接放 `anyrouter.dll`（不能带子目录），`checksums.txt` 为 `<sha256>  <zip名>`（两空格）。`registry.json` 已按 `schema_version: 2` 写好，**发布前把 `repository` 里的 `OWNER` 换成你的 GitHub 账号**，并同步替换 `main.go` 里的 `pluginRepo`（宿主会拒绝仓库地址为空的注册响应）。
+zip 根目录直接放 `anyrouter.dll`（不能带子目录），`checksums.txt` 为 `<sha256>  <zip名>`（两空格）。`registry.json` 已按 `schema_version: 2` 指向本仓库（`https://github.com/qizhuxu/anyrouter-cpa-plugin`），`main.go` 的 `pluginRepo` 同步一致——宿主会拒绝仓库地址为空的注册响应。
 
 ## 10. 面板设计说明（运维台账）
 
