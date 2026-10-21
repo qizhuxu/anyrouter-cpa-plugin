@@ -1,0 +1,12 @@
+dist/
+*.h
+*.test
+*.exe
+anyrouter-plugin
+# build artifacts (the server builds its own .so)
+*.so
+*.dll
+*.dylib
+# runtime state written by the plugin
+anyrouter-state.json
+*.state.json

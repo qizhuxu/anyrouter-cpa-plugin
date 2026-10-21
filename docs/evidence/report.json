@@ -1,0 +1,252 @@
+[
+  {
+    "file": "page.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 40,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "page-@2x.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 6,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "motion-probe",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "motion": {
+      "load": {
+        "elements": 2,
+        "loops": 0,
+        "maxMove": 5,
+        "maxSize": 0,
+        "maxOpacity": 0.84,
+        "top": [
+          {
+            "el": "div.head",
+            "move": 5,
+            "size": 0,
+            "opacity": 0.84,
+            "loop": false,
+            "sources": [
+              "css:rise"
+            ]
+          },
+          {
+            "el": "div#ledger.ledger",
+            "move": 5,
+            "size": 0,
+            "opacity": 0.84,
+            "loop": false,
+            "sources": [
+              "css:rise"
+            ]
+          }
+        ]
+      },
+      "steps": {
+        "elements": 10,
+        "loops": 0,
+        "maxMove": 449,
+        "maxSize": 0.244,
+        "maxOpacity": 1,
+        "top": [
+          {
+            "el": "aside#drawer.drawer",
+            "move": 449,
+            "size": 0,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "transition:transform"
+            ]
+          },
+          {
+            "el": "button#drawerClose.btn.btn-quiet",
+            "move": 449,
+            "size": 0,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "transition:border-top-color",
+              "transition:background-color",
+              "transition:border-bottom-color"
+            ]
+          },
+          {
+            "el": "input#f-remark",
+            "move": 414,
+            "size": 0,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "transition:border-top-color",
+              "transition:border-bottom-color",
+              "transition:border-left-color"
+            ]
+          },
+          {
+            "el": "button#balanceAll.btn",
+            "move": 125,
+            "size": 0,
+            "opacity": 0.45,
+            "loop": false,
+            "sources": [
+              "transition:border-top-color",
+              "transition:background-color",
+              "transition:border-bottom-color"
+            ]
+          },
+          {
+            "el": "div#strip.strip",
+            "move": 60,
+            "size": 0,
+            "opacity": 1,
+            "loop": false,
+            "sources": [
+              "js:style",
+              "css:rise"
+            ]
+          },
+          {
+            "el": "span.spin",
+            "move": 2,
+            "size": 0.244,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "css:spin"
+            ]
+          },
+          {
+            "el": "button#checkinAll.btn",
+            "move": 66,
+            "size": 0,
+            "opacity": 0.45,
+            "loop": false,
+            "sources": [
+              "transition:opacity",
+              "transition:border-top-color",
+              "transition:background-color"
+            ]
+          },
+          {
+            "el": "button#addAccount.btn.btn-primary",
+            "move": 66,
+            "size": 0,
+            "opacity": 0.45,
+            "loop": false,
+            "sources": [
+              "transition:border-top-color",
+              "transition:background-color",
+              "transition:border-bottom-color"
+            ]
+          }
+        ]
+      },
+      "hero": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "layers": 0
+      },
+      "scroll": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "scrollable": false
+      }
+    },
+    "issues": []
+  },
+  {
+    "file": "motion-entry-end.jpg",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "entry",
+    "issues": [],
+    "frames": {
+      "start": {
+        "file": "motion-entry-start.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 183
+      },
+      "mid": {
+        "file": "motion-entry-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 422
+      },
+      "end": {
+        "file": "motion-entry-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 1881
+      }
+    },
+    "sampling": {
+      "mode": "entry"
+    },
+    "durationMs": 1881,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-entry-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    }
+  },
+  {
+    "file": "motion-end.jpg",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "issues": [],
+    "frames": {
+      "start": {
+        "file": "motion-start.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 5233
+      },
+      "mid": {
+        "file": "motion-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 6640
+      },
+      "end": {
+        "file": "motion-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 11578
+      }
+    },
+    "sampling": {
+      "mode": "action",
+      "step": 9,
+      "action": "click",
+      "raw": "click #checkinAll"
+    },
+    "durationMs": 11578,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    }
+  }
+]

@@ -1,0 +1,33 @@
+[
+  {
+    "file": "stitch.png",
+    "width": 1344,
+    "height": 530,
+    "columns": 2,
+    "items": [
+      {
+        "naturalWidth": 1280,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 450,
+        "labelHeight": 32,
+        "x": 24,
+        "y": 24,
+        "label": "重做前：表单占首屏，内容为空",
+        "labelY": 482
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 680,
+        "y": 24,
+        "label": "重做后：运维台账，余额是主角",
+        "labelY": 432
+      }
+    ],
+    "issues": []
+  }
+]

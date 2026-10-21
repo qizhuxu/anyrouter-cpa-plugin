@@ -1,0 +1,56 @@
+# AnyRouter 插件配置示例
+#
+# 复制到 CPA 的 config.yaml，合并进 plugins.configs。
+# 只需同时打开两个开关：全局 plugins.enabled 与单插件 enabled。
+
+plugins:
+  enabled: true
+  dir: "plugins"
+  configs:
+    anyrouter:
+      enabled: true
+      priority: 10
+
+      # 站点根地址：挑战页与默认的余额接口都从这里派生
+      base_url: "https://anyrouter.top"
+
+      # 签到接口。留空则用 {base_url}/api/user/sign_in。
+      # 脚本原先默认走镜像 https://blog.zhx47.top/anyrouter，需要时填完整地址。
+      checkin_url: ""
+
+      # 余额接口。留空则用 {base_url}/api/user/self。
+      balance_url: ""
+
+      # 请求 User-Agent，保持与浏览器一致可降低被挑战的概率。
+      user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+
+      # 自动执行加速乐（JSL）挑战页并把 acw_sc__v2 Cookie 缓存起来。
+      challenge_enabled: true
+      challenge_ttl_minutes: 30
+
+      # 单个上游请求的超时时间（秒）。请求经宿主的 host.http.do 发出，
+      # 宿主的代理与 TLS 策略照常生效。
+      request_timeout_seconds: 20
+
+      # 每日自动签到与执行时间（按 timezone 解释）。
+      auto_checkin: true
+      checkin_time: "08:00"
+
+      # 定时刷新余额，供面板与 CPA 凭证页显示。
+      auto_refresh_balance: true
+      balance_refresh_minutes: 30
+
+      # 额度换算比例：new-api 默认 500000 额度 = 1 美元。
+      quota_per_unit: 500000
+
+      # 自动任务使用的时区：Local 跟随宿主进程，也可写 Asia/Shanghai。
+      timezone: "Local"
+
+      # AnyRouter 专用代理。留空 = 走宿主的 host.http.do，自动继承 CPA 的
+      # requests.proxy-url（推荐，国内直连不通时在宿主里配一次即可）。
+      # 填了则插件改用自有 HTTP 客户端走这个代理；direct / none 表示强制直连。
+      # 支持 http:// https:// socks5:// socks5h://
+      proxy_url: ""
+
+      # 更详细的插件日志（不含任何凭证内容）。
+      debug: false

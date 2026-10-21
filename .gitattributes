@@ -1,0 +1,7 @@
+# Normalise line endings: the Linux deployment pulls and runs these files,
+# so shell scripts and Go sources must be LF in the repository.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
