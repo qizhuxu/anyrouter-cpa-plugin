@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    tags-ignore: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: vet + test (CGO off)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      # cgo is not needed: cabi.go is implicitly cgo-only, so the pure logic
+      # (config, challenge solving, classification, state, proxy) stays testable.
+      - name: vet
+        run: CGO_ENABLED=0 go vet ./...
+
+      - name: test
+        run: CGO_ENABLED=0 go test -count=1 ./...
+
+      - name: plugin store contract
+        run: python3 scripts/validate_registry.py
+
+      - name: version consistency
+        run: |
+          registry=$(python3 -c "import json;print(json.load(open('registry.json'))['plugins'][0]['version'])")
+          code=$(grep -oP 'pluginVersion\s+=\s+"\K[^"]+' main.go)
+          [ "$registry" = "$code" ] || { echo "registry.json version $registry != main.go version $code"; exit 1; }

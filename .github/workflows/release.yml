@@ -1,0 +1,144 @@
+name: Release
+
+# Publishing a tag (for example v0.1.0) builds one archive per platform and
+# attaches them to a GitHub release, which is what the CPA plugin store installs
+# from. Asset names and the archive layout follow the host contract:
+#   <pluginID>_<version>_<goos>_<goarch>.zip   (library at the archive root)
+#   checksums.txt                              (<sha256>  <name>)
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-latest, cross: "aarch64-linux-gnu-gcc" }
+          - { goos: windows, goarch: amd64, runner: windows-latest, mingw: true }
+          - { goos: darwin,  goarch: arm64, runner: macos-latest }
+          - { goos: darwin,  goarch: amd64, runner: macos-13 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install aarch64 cross toolchain
+        if: matrix.cross != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      # MinGW-W64 from MSYS2. Do not use TDM-GCC here: it links c-shared output
+      # that Windows refuses to load (ERROR_BAD_EXE_FORMAT).
+      - name: Set up MinGW-W64
+        if: matrix.mingw
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
+
+      - name: Build the plugin
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+          CROSS_CC: ${{ matrix.cross }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.mingw }}" = "true" ]; then
+            echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
+            export CC="C:/msys64/mingw64/bin/gcc.exe"
+          elif [ -n "${CROSS_CC}" ]; then
+            export CC="${CROSS_CC}"
+          fi
+          echo "CC=${CC:-default}"
+          go version
+          go test -count=1 ./...
+          mkdir -p dist
+          case "${GOOS}" in
+            windows) ext=dll ;;
+            darwin)  ext=dylib ;;
+            *)       ext=so ;;
+          esac
+          go build -buildmode=c-shared -trimpath -ldflags "-s -w" -o "dist/anyrouter.${ext}" .
+          rm -f dist/*.h
+          ls -l dist
+
+      - name: Package the archive and checksums
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: python3 scripts/build_release.py --goos "${GOOS}" --goarch "${GOARCH}"
+
+      - name: Verify the archive against the store contract
+        shell: bash
+        run: python3 scripts/validate_registry.py dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anyrouter-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/checksums.txt
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Keep per-artifact directories: checksums.txt would collide when merged.
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect archives and merge checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -name '*.zip' -exec mv {} dist/ \;
+          find artifacts -name 'checksums.txt' -exec cat {} \; | sort -u > dist/checksums.txt
+          ls -l dist
+          cat dist/checksums.txt
+
+      - name: Version consistency (tag == registry.json == main.go)
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          registry=$(python3 -c "import json;print(json.load(open('registry.json'))['plugins'][0]['version'])")
+          code=$(grep -oP 'pluginVersion\s+=\s+"\K[^"]+' main.go)
+          echo "tag=$tag registry=$registry main.go=$code"
+          [ "$tag" = "$registry" ] || { echo "tag and registry.json version differ"; exit 1; }
+          [ "$tag" = "$code" ] || { echo "tag and main.go pluginVersion differ"; exit 1; }
+
+      - name: Final store-contract validation
+        run: python3 scripts/validate_registry.py dist/*.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            dist/*.zip dist/checksums.txt

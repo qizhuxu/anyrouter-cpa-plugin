@@ -352,3 +352,46 @@ REPO_URL=https://github.com/<owner>/<repo>.git ./deploy_linux.sh
 - **仓库不放二进制**（`.gitignore` 排除 `dist/`、`*.so`、`*.dll`）：服务器自己构建，避免"产物与源码不一致"。
 - **`.gitattributes` 强制 LF**：Windows 上提交的 `.sh` 若带 CRLF，在 Linux 上会直接执行失败。
 - **部署目录的 `config.yaml` 不进仓库**：里面是管理密钥、端口与路径差异；插件配置以仓库的 `config.example.yaml` 为模板。面板托管的自动任务设置写在插件状态文件（容器里指向挂载的 `plugins/`），同样不属于源码。
+
+## 13. 从插件商店安装与发版（官方契约）
+
+仓库按 CPA 插件商店的契约组织，判断依据是宿主的源码（`internal/pluginstore/{registry.go,github.go,checksum.go,install.go}`），不是文档描述：
+
+| 契约 | 要求 | 本仓库 |
+|---|---|---|
+| registry.json | `schema_version` 为 1 或 2；`id`/`name`/`description`/`author` 必填；`github-release` 必须有 `repository`（`https://github.com/<owner>/<repo>`）；`version` 可选但须匹配 `^[0-9][0-9A-Za-z.+-]*$` | schema 2，字段齐全，`version` 与 tag 一致 |
+| 发行资产 | `<id>_<version>_<goos>_<goarch>.zip` + `checksums.txt`；安装版本取自**最新 release tag**（去掉前导 `v`） | CI 打 tag 时产出 |
+| 包内结构 | 动态库必须在 zip **根目录**，只能有一个，命名 `<id><ext>` 或 `<id>-v<version><ext>`；不得有反斜杠、绝对路径或 `..` | `anyrouter.so` / `.dll` / `.dylib` 在根目录 |
+| 校验 | `checksums.txt` 为 `<sha256>  <名称>`，安装前逐一校验 | CI 汇总所有平台的 sha256 |
+
+**从商店安装**（CPA 侧）：
+
+```yaml
+plugins:
+  enabled: true
+  store-sources:
+    - "https://raw.githubusercontent.com/qizhuxu/anyrouter-cpa-plugin/main/registry.json"
+```
+
+```bash
+curl -X POST http://127.0.0.1:8317/v8/management/plugins/store/anyrouter/install \
+  -H "Authorization: Bearer $MANAGEMENT_KEY"
+```
+
+**发版**：改 `main.go` 的 `pluginVersion` 与 `registry.json` 的 `version`（CI 会校验两者与 tag 一致），然后
+
+```bash
+git tag -a v0.1.0 -m "anyrouter 0.1.0" && git push origin v0.1.0
+```
+
+tag 触发 `.github/workflows/release.yml`：5 个平台矩阵构建（linux/amd64、linux/arm64 用 `aarch64-linux-gnu-gcc` 交叉编译；windows/amd64 用 MSYS2 的 **MinGW-W64**——刻意避开会链出无法加载 DLL 的 TDM-GCC；darwin/arm64 与 darwin/amd64 分别在 macOS runner 上）→ 每个平台跑单测并打包 → 汇总 `checksums.txt` → 校验版本一致性 → 生成 GitHub Release。`ci.yml` 在推分支/PR 时跑 `gofmt`、`go vet`、`go test`（CGO 关闭）与商店契约校验。
+
+**自检工具**（都可以在本地跑）：
+
+| 命令 | 作用 |
+|---|---|
+| `python scripts/validate_registry.py` | 按上面的契约校验 registry.json 与 `dist/*.zip`（命名、库在根目录、checksums 一致性） |
+| `cd scripts/store_check && go run . --goos linux --goarch arm64` | 用**宿主自己的商店客户端**（`sdk/pluginstore`）拉 registry、解析最新 release、下载并按平台选包、校验 checksum、装到临时目录——与用户在商店点"安装"走的是同一段代码 |
+| `REPO_URL=… ./scripts/deploy_linux.sh` | 服务器一键重拉重部署（见上一节） |
+
+License: MIT（见 `LICENSE`）。
