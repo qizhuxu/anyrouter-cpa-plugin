@@ -281,7 +281,7 @@ function renderStrip(){
     strip.appendChild(bad);
   }
   strip.appendChild(fact("剩余合计", known ? money(total) : "未读取", "", "secondary"));
-  strip.appendChild(fact("下次自动签到", cfg.auto_checkin ? (cfg.checkin_time + " · " + (cfg.timezone || "Local")) : "已关闭", next ? ("约 " + next) : "", "secondary"));
+  strip.appendChild(fact("下次自动签到", sched.auto_checkin ? (sched.checkin_time + " · " + (sched.timezone || "Local")) : "已关闭", next ? ("约 " + next) : "", "secondary"));
   var challenge = state.status && state.status.challenge ? state.status.challenge : {};
   var hosts = Object.keys(challenge);
   strip.appendChild(fact("挑战 Cookie", hosts.length ? (hosts[0] + " · " + agoText(challenge[hosts[0]].solved_at)) : "按需获取", "", "secondary"));

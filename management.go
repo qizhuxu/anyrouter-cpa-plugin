@@ -285,7 +285,9 @@ func handleStatus() managementResponse {
 }
 
 func handleAccounts() managementResponse {
-	cfg := currentConfig()
+	// Effective values, so the panel never shows "已关闭" next to a panel-enabled
+	// schedule.
+	cfg := effectiveConfig()
 	list, errLoad := accounts(5 * time.Second)
 	if errLoad != nil && len(list) == 0 {
 		return jsonError(http.StatusBadGateway, "host_unavailable", "读取 CPA 凭证失败: "+errLoad.Error())
