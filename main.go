@@ -14,8 +14,7 @@ const (
 	pluginAuthor  = "anyrouter-plugin"
 	// pluginRepo must not be empty: the host rejects a registration whose
 	// metadata carries no repository URL (internal/pluginhost validPlugin).
-	// Replace OWNER before publishing to the plugin store.
-	pluginRepo  = "https://github.com/OWNER/anyrouter-plugin"
+	pluginRepo  = "https://github.com/qizhuxu/anyrouter-cpa-plugin"
 	providerKey = "anyrouter"
 )
 

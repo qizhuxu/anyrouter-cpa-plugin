@@ -5,9 +5,9 @@
       "id": "anyrouter",
       "name": "AnyRouter",
       "description": "AnyRouter 多账号 Cookie 签到与余额查询：自动执行加速乐挑战页取得动态 Cookie，支持每日定时签到、余额面板，并通过 quota_provider 把余额显示在 CPA 凭证页。",
-      "author": "anyrouter-plugin",
+      "author": "qizhuxu",
       "version": "0.1.0",
-      "repository": "https://github.com/OWNER/anyrouter-plugin",
+      "repository": "https://github.com/qizhuxu/anyrouter-cpa-plugin",
       "license": "MIT",
       "tags": ["checkin", "quota", "anyrouter"],
       "install": {
