@@ -131,6 +131,18 @@ docker run -d --name anyrouter-cpa --restart unless-stopped \
 1. **容器里 `server.host` 必须绑所有接口**。我先按裸机习惯写了 `host: "127.0.0.1"`，容器内只监听自己的 loopback，宿主经 `-p` 映射进来直接 `Connection reset by peer`；改成 `host: ""` 后正常（公网仍由 `-p 127.0.0.1:8317:8317` 限制）。
 2. **容器内 `management.allow-remote` 默认 false**，宿主访问管理 API 得到 `403 remote management disabled`。本部署端口只绑回环，因此打开它是安全的（这正是 skill 记录的容器坑）。
 
+## 源码与部署的真相来源（GitHub）
+
+工作区、GitHub 与服务器三处的唯一真相是仓库 `main` 分支：<https://github.com/qizhuxu/anyrouter-cpa-plugin>。
+
+- 服务器侧用 `scripts/deploy_linux.sh` 一条命令重拉重部署：`REPO_URL=… ./deploy_linux.sh`（fetch+ff-only → `go test` → `cgo` 构建 + `dlopen` 自检 → 安装到 `plugins/` → `docker restart` → 打印注册日志）。已实测幂等（第二次是 `Already up to date` 后照常重建重启）。
+- 仓库不含二进制（`.gitignore` 排除 `dist/`、`*.so`、`*.dll`），服务器自己构建，避免产物与源码不一致；`.gitattributes` 强制 LF，避免 Windows 提交的 `.sh` 在 Linux 上因 CRLF 失败。
+- 部署目录的 `config.yaml` 与插件状态文件不进仓库：前者含管理密钥与路径差异，后者是面板托管设置的运行态。
+
+## 自动化任务（面板托管）
+
+`scheduler` 每次 tick 读**生效配置**（配置文件 + 面板覆盖），因此面板改动下一分钟生效、无需重启。面板覆盖写在插件状态文件（部署里指向挂载的 `/CLIProxyAPI/plugins/anyrouter-state.json`，容器重建不丢）；`{"reset":true}` 恢复跟随配置。实测：把签到改为 `09:30`、余额间隔 `40` 分钟 → `source=panel`、`next_checkin_at` 随之变化、状态文件落盘；提交 `25:99` 被拒；重启后覆盖仍生效。
+
 ## 与 Windows 端的差异（实测，值得记住）
 
 
