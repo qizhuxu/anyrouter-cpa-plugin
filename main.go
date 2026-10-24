@@ -10,7 +10,7 @@ import (
 
 const (
 	pluginID      = "anyrouter"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.1.1"
 	pluginAuthor  = "qizhuxu"
 	// pluginRepo must not be empty: the host rejects a registration whose
 	// metadata carries no repository URL (internal/pluginhost validPlugin).

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
@@ -88,6 +89,7 @@ func handleManagement(request []byte) ([]byte, error) {
 			return errorEnvelope("invalid_request", "malformed management request: "+errUnmarshal.Error(), http.StatusBadRequest), nil
 		}
 	}
+	noteResourceMount(req.Path)
 	path := normaliseRoutePath(req.Path)
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
 	if method == "" {
@@ -100,13 +102,38 @@ func handleManagement(request []byte) ([]byte, error) {
 	return okEnvelope(resp)
 }
 
-// normaliseRoutePath strips the mount prefix so both the resource mount
-// (/v0/resource/plugins/anyrouter/panel) and the management mount
-// (/v0/management/anyrouter/status) resolve to the same local path.
+// Mount prefixes the host uses for plugin traffic.
+//
+// The management mount carries the prefix the plugin declared itself
+// ("/v0/management" + "/anyrouter/status"), but the resource mount carries the
+// host's plugin *instance* id: "/v0/resource/plugins/<instance-id>/panel". That
+// instance id need not equal the declared id - the host can name the instance
+// after a renamed config key or a differently named library - so it is treated
+// as an opaque segment instead of a literal.
+const (
+	resourceMountPrefix   = "/v0/resource/plugins/"
+	managementMountPrefix = "/v0/management/"
+	legacyPluginMount     = "/plugins/"
+)
+
+// normaliseRoutePath strips the mount prefix so the resource mount
+// (/v0/resource/plugins/<instance-id>/panel) and the management mount
+// (/v0/management/anyrouter/status) both resolve to "/panel" and "/status".
 func normaliseRoutePath(raw string) string {
 	path := strings.TrimSpace(raw)
-	if index := strings.Index(path, pluginRoutePrefix); index >= 0 {
-		path = path[index+len(pluginRoutePrefix):]
+	if path == "" {
+		return "/"
+	}
+	lower := strings.ToLower(path)
+	switch {
+	case strings.HasPrefix(lower, resourceMountPrefix):
+		path = dropLeadingSegment(path[len(resourceMountPrefix):])
+	case strings.HasPrefix(lower, legacyPluginMount):
+		path = dropLeadingSegment(path[len(legacyPluginMount):])
+	case strings.HasPrefix(lower, managementMountPrefix):
+		path = stripDeclaredPrefix(path[len(managementMountPrefix):])
+	default:
+		path = stripDeclaredPrefix(path)
 	}
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -118,8 +145,74 @@ func normaliseRoutePath(raw string) string {
 	return path
 }
 
+// dropLeadingSegment removes the first path segment (the host's plugin instance
+// id) and returns the remainder as an absolute path.
+func dropLeadingSegment(rest string) string {
+	rest = strings.TrimPrefix(strings.TrimSpace(rest), "/")
+	if index := strings.Index(rest, "/"); index >= 0 {
+		return rest[index:]
+	}
+	return "/"
+}
+
+// stripDeclaredPrefix removes the plugin's own route prefix only as a whole
+// segment, so "/anyrouter/status" becomes "/status" while an instance id such as
+// "anyrouter-linux-amd64" is never sliced in the middle of the name. When the
+// host prefixes its instance id in front of the declared path, that segment is
+// dropped once and the check is repeated.
+func stripDeclaredPrefix(rest string) string {
+	rest = strings.TrimPrefix(strings.TrimSpace(rest), "/")
+	if rest == "" || rest == pluginID {
+		return "/"
+	}
+	if strings.HasPrefix(rest, pluginID+"/") {
+		return rest[len(pluginID):]
+	}
+	if index := strings.Index(rest, "/"); index > 0 {
+		return stripDeclaredPrefix(rest[index+1:])
+	}
+	return "/" + rest
+}
+
+// resourceMountInstanceID reports the instance id the host used for the resource
+// mount, so the operator can be told the exact panel URL.
+func resourceMountInstanceID(raw string) string {
+	path := strings.TrimSpace(raw)
+	if !strings.HasPrefix(strings.ToLower(path), resourceMountPrefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(path[len(resourceMountPrefix):], "/")
+	if index := strings.Index(rest, "/"); index > 0 {
+		return rest[:index]
+	}
+	return rest
+}
+
+var panelMountNotice sync.Once
+
+// noteResourceMount logs the effective panel URL once per process. Operators
+// usually discover the plugin through the host UI, which links the resource path
+// built from the instance id; printing it removes the guesswork.
+func noteResourceMount(rawPath string) {
+	instanceID := resourceMountInstanceID(rawPath)
+	if instanceID == "" {
+		return
+	}
+	panelMountNotice.Do(func() {
+		hostLogf("info", "面板地址：/v0/resource/plugins/%s/panel（实例 id 由宿主决定；管理路由固定为 /v0/management%s/*）",
+			instanceID, pluginRoutePrefix)
+	})
+}
+
 func dispatchManagement(method, path string, req managementRequest) (managementResponse, bool) {
 	switch path {
+	case "/":
+		// Mount root: the host can send the user to /v0/resource/plugins/<id>
+		// without the resource suffix. The panel is this plugin's only resource.
+		if method != http.MethodGet {
+			return jsonError(http.StatusMethodNotAllowed, "method_not_allowed", "面板仅支持 GET"), true
+		}
+		return htmlResponse(http.StatusOK, panelHTML()), true
 	case "/panel":
 		if method != http.MethodGet {
 			return jsonError(http.StatusMethodNotAllowed, "method_not_allowed", "面板仅支持 GET"), true

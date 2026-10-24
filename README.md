@@ -156,6 +156,16 @@ plugins:
 
 删除账号走宿主自带接口 `DELETE /v0/management/auth-files?name=<file>`（面板里的"删除"按钮就是这么做的）——插件侧没有删除凭证的宿主回调，因此禁用/启用由插件做，删除由宿主做。
 
+**面板地址里的 id 是宿主决定的实例 id，不是插件声明的 id。** 宿主用插件库文件名（或配置键）命名实例，资源路由挂载为 `/v0/resource/plugins/<实例 id>/panel`；管理路由则固定使用插件声明的 `/anyrouter` 前缀（`/v0/management/anyrouter/*`）。因此：
+
+| 装进 `plugins/` 的文件名 | 实例 id | 面板地址 |
+|---|---|---|
+| `anyrouter.so`（发行包与商店安装都用这个） | `anyrouter` | `/v0/resource/plugins/anyrouter/panel` |
+| `anyrouter-linux-amd64.so` | `anyrouter-linux-amd64` | `/v0/resource/plugins/anyrouter-linux-amd64/panel` |
+
+不确定时看 `GET /v8/management/plugins` 里该插件的 `id`，或看启动日志里的一行「面板地址：…」（v0.1.1 起会打印）。**建议统一用 `anyrouter.so`**，或在面板入口处按宿主给出的 id 访问。
+
+> v0.1.0 的已知 bug：实例 id 不等于 `anyrouter` 时（例如库名带平台后缀），资源路由解析会按子串切分前缀，把 `anyrouter-linux-amd64` 切成 `-linux-amd64/panel`，面板返回 `{"error":"not_found","message":"未知路径: …"}`。v0.1.1 改为结构化解析挂载前缀，任何实例 id 都正常。
 ## 6. 工作原理
 
 - **账号 = CPA 凭证文件**：写入 `auths/anyrouter-<备注>-<随机>.json`，内容 `{"type":"anyrouter","provider":"anyrouter","remark":...,"cookie":...,"user_id":...,"disabled":...,"last_checkin_*":...}`。宿主据此建立凭证（实测 `provider=anyrouter type=anyrouter` 且带 `auth_index`），于是配额查询、凭证页展示、启用停用都复用宿主能力；插件不需要自己造一份持久化状态。
