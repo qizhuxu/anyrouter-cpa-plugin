@@ -762,10 +762,33 @@ function deleteAccount(){
 
 /* ---------- drawer ---------- */
 
+// renderCookieHelp turns the configured site into a clickable link, so the
+// operator can jump straight to the login page the credential comes from.
+function renderCookieHelp(){
+  var help = el("cookieHelp");
+  if (!help) { return; }
+  var site = (state.config && state.config.base_url) || "";
+  help.textContent = "";
+  var prefix = document.createTextNode("浏览器登录 ");
+  help.appendChild(prefix);
+  if (site) {
+    var link = document.createElement("a");
+    link.href = site;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = site.replace(/^https?:\\/\\//, "");
+    help.appendChild(link);
+  } else {
+    help.appendChild(document.createTextNode("AnyRouter"));
+  }
+  help.appendChild(document.createTextNode(" 后，开发者工具 → 网络 → 任意请求 → 请求标头里的 Cookie 整条复制。"));
+}
+
 function openDrawer(mode, name){
   state.editing = mode === "edit" ? name : "";
   state.deleteArmed = false;
   el("drawerTitle").textContent = mode === "edit" ? "编辑账号" : "新增账号";
+  renderCookieHelp();
   el("drawerDelete").hidden = mode !== "edit";
   el("drawerDelete").textContent = "删除账号";
   el("drawerHint").textContent = "";

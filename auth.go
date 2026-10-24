@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
@@ -60,20 +61,57 @@ func handleAuthParse(request []byte) ([]byte, error) {
 }
 
 // handleAuthLoginStart answers the interactive-login probe. AnyRouter has no
-// OAuth or device-code flow: accounts are imported by pasting a browser Cookie,
-// so the start step points at the plugin panel and the poll step explains it.
+// OAuth or device-code flow: an account is imported by pasting a browser Cookie,
+// so the login step opens the site itself (where the user signs in) and the poll
+// step explains how to finish the import in the panel.
+//
+// The URL must not be a hard-coded panel path: the host names the plugin instance
+// after the library file, so the resource mount can carry a different id than the
+// declared one. When the plugin has already served a request it knows that id and
+// reports the exact panel path as metadata; otherwise the site URL is the only
+// safe target.
 func handleAuthLoginStart(request []byte) ([]byte, error) {
+	cfg := currentConfig()
+	loginURL := strings.TrimRight(firstNonEmpty(cfg.BaseURL, defaultBaseURL), "/") + "/"
+
+	metadata := map[string]any{
+		"flow":  "cookie-import",
+		"steps": "在浏览器登录后，从 DevTools → Network 复制任意 api/user 请求的完整 Cookie 请求头，粘贴到插件面板的「新增账号」表单。",
+	}
+	if panelPath := knownPanelPath(); panelPath != "" {
+		metadata["panel_path"] = panelPath
+	}
+
 	return okEnvelope(pluginapi.AuthLoginStartResponse{
-		Provider: providerKey,
-		URL:      "/v0/resource/plugins/" + pluginID + "/panel",
-		State:    "cookie-import",
+		Provider:  providerKey,
+		URL:       loginURL,
+		State:     "cookie-import",
+		ExpiresAt: time.Now().Add(30 * time.Minute),
+		Metadata:  metadata,
 	})
 }
 
+// knownPanelPath returns the plugin's panel path when the host has revealed the
+// instance id it mounted this plugin under, and "" otherwise.
+func knownPanelPath() string {
+	instanceID := knownResourceInstanceID()
+	if instanceID == "" {
+		return ""
+	}
+	return resourceMountPrefix + instanceID + "/panel"
+}
+
 func handleAuthLoginPoll(request []byte) ([]byte, error) {
+	cfg := currentConfig()
+	message := "AnyRouter 不支持交互式登录：请在 " +
+		strings.TrimRight(firstNonEmpty(cfg.BaseURL, defaultBaseURL), "/") +
+		" 登录后，把浏览器 Cookie 粘贴到插件面板的「新增账号」表单完成导入。"
+	if panelPath := knownPanelPath(); panelPath != "" {
+		message += "（面板：" + panelPath + "）"
+	}
 	return okEnvelope(pluginapi.AuthLoginPollResponse{
 		Status:  pluginapi.AuthLoginStatusError,
-		Message: "AnyRouter 不支持交互式登录，请在插件面板粘贴浏览器 Cookie 导入账号。",
+		Message: message,
 	})
 }
 

@@ -156,6 +156,9 @@ plugins:
 
 删除账号走宿主自带接口 `DELETE /v0/management/auth-files?name=<file>`（面板里的"删除"按钮就是这么做的）——插件侧没有删除凭证的宿主回调，因此禁用/启用由插件做，删除由宿主做。
 
+**交互式登录入口跳转到站点**：CPA 的凭证页点「登录」时走 `GET /v8/management/oauth/auth-url?provider=anyrouter`，插件返回站点地址（默认 `https://anyrouter.top/`，跟随 `base_url` 配置；实测 `{"state":"cookie-import","status":"ok","url":"https://anyrouter.top/"}`）。AnyRouter 没有 OAuth/设备码流程，落地后按提示复制 Cookie 到面板即可；`PollLogin` 返回 error 并说明步骤（避免界面一直转圈）。宿主已经派发过一次资源请求后，插件知道自己被挂在哪个实例 id 下，会在 login 响应的 `metadata.panel_path` 里附上准确的面板路径。
+
+**挑战 Cookie 会主动重解**：加速乐是**间歇性**拦截（同样的 Cookie 可能下一秒被拒），所以一次 API 调用最多尝试 3 次：第一次用缓存/按需解，之后每次**清缓存、从站点根页加 `_t=` cache-buster 重新解**（API 路径上那份挑战页的 nonce 可能已失效），退避 400ms/800ms。日志会打印「响应为挑战页，刷新挑战 Cookie 后重试」与「来源=https://anyrouter.top/?_t=…，主动刷新」。注意站点还会按**请求频率**挑战，人工连点仍可能被拦（提示里会建议降低频率）——正常用法（面板点一下、30 分钟刷新、每日签到）不触发。
 **面板地址里的 id 是宿主决定的实例 id，不是插件声明的 id。** 宿主用插件库文件名（或配置键）命名实例，资源路由挂载为 `/v0/resource/plugins/<实例 id>/panel`；管理路由则固定使用插件声明的 `/anyrouter` 前缀（`/v0/management/anyrouter/*`）。因此：
 
 | 装进 `plugins/` 的文件名 | 实例 id | 面板地址 |

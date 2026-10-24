@@ -325,7 +325,7 @@ func (c *anyrouterClient) headers(account *Account, target string, challenge str
 // then from the site root: the original Deno wrapper did the same, and some
 // 加速乐 deployments hand out a challenge bound to the requested path, so a
 // cookie solved from "/" is not accepted everywhere.
-func (c *anyrouterClient) ensureChallenge(target string, account *Account) string {
+func (c *anyrouterClient) ensureChallenge(target string, account *Account, fresh bool) string {
 	if !c.cfg.ChallengeEnabled {
 		return ""
 	}
@@ -334,15 +334,24 @@ func (c *anyrouterClient) ensureChallenge(target string, account *Account) strin
 		return ""
 	}
 	cacheKey := parsed.Host + "|" + c.proxyFor(account).key()
-	if entry, ok := challengeStore.get(cacheKey, c.cfg.ChallengeTTL); ok {
-		return entry.Cookies
+	if !fresh {
+		if entry, ok := challengeStore.get(cacheKey, c.cfg.ChallengeTTL); ok {
+			return entry.Cookies
+		}
 	}
 
-	for _, pageURL := range c.challengePageCandidates(target) {
+	for _, pageURL := range c.challengePageCandidates(target, fresh) {
+		headers := c.headers(account, pageURL, "", false)
+		if fresh {
+			// A rejected cookie means the page we solved from is stale; ask the
+			// CDN for a current interstitial instead of a cached copy.
+			headers.Set("Cache-Control", "no-cache")
+			headers.Set("Pragma", "no-cache")
+		}
 		resp, errDo := c.do(pluginapi.HTTPRequest{
 			Method:  http.MethodGet,
 			URL:     pageURL,
-			Headers: c.headers(account, pageURL, "", false),
+			Headers: headers,
 		}, account)
 		if errDo != nil {
 			hostLogf("warn", "获取挑战页失败 (%s): %v", pageURL, errDo)
@@ -359,23 +368,52 @@ func (c *anyrouterClient) ensureChallenge(target string, account *Account) strin
 			continue
 		}
 		challengeStore.put(cacheKey, cookies, method)
-		hostLogf("info", "已获取挑战 Cookie (host=%s, 出口=%s, 来源=%s, 方式=%s, 字段数=%d)",
-			parsed.Host, c.proxyFor(account).describe(), pageURL, method, cookieValueCount(cookies))
+		hostLogf("info", "已获取挑战 Cookie (host=%s, 出口=%s, 来源=%s, 方式=%s, 字段数=%d%s)",
+			parsed.Host, c.proxyFor(account).describe(), pageURL, method, cookieValueCount(cookies),
+			map[bool]string{true: "，主动刷新"}[fresh])
 		return cookies
 	}
 	return ""
 }
 
-// challengePageCandidates lists the URLs to try, most specific first.
-func (c *anyrouterClient) challengePageCandidates(target string) []string {
+// withCacheBuster appends a unique query parameter so an intermediate cache
+// serves a fresh interstitial instead of the copy whose nonce was rejected.
+func withCacheBuster(raw string) string {
+	parsed, errParse := url.Parse(raw)
+	if errParse != nil || parsed.Host == "" {
+		return raw
+	}
+	query := parsed.Query()
+	query.Set("_t", strconv.FormatInt(time.Now().UnixNano(), 10))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+// challengePageCandidates lists the URLs to solve the interstitial from.
+//
+// On a first solve the requested URL usually answers with the interstitial
+// itself, so it is tried first. After a rejection that page is known to be stale
+// - the site root serves a current nonce, and the API path keeps returning a copy
+// whose computed value the server refuses - so a fresh solve starts at the root
+// and busts the CDN cache.
+func (c *anyrouterClient) challengePageCandidates(target string, fresh bool) []string {
 	parsed, errParse := url.Parse(target)
 	base := strings.TrimRight(c.cfg.BaseURL, "/")
-	candidates := []string{target}
+	hostRoot := ""
 	if errParse == nil && parsed.Host != "" {
-		candidates = append(candidates, parsed.Scheme+"://"+parsed.Host+"/")
+		hostRoot = parsed.Scheme + "://" + parsed.Host + "/"
 	}
-	if root := base + "/"; root != target {
-		candidates = append(candidates, root)
+	root := base + "/"
+	candidates := []string{target}
+	if fresh {
+		candidates = []string{root, hostRoot, target}
+	} else {
+		candidates = append(candidates, hostRoot, root)
+	}
+	if fresh {
+		for index := range candidates {
+			candidates[index] = withCacheBuster(candidates[index])
+		}
 	}
 	seen := make(map[string]struct{}, len(candidates))
 	out := make([]string, 0, len(candidates))
@@ -403,9 +441,14 @@ func (c *anyrouterClient) apiRequest(method, target string, account *Account, bo
 
 	cacheKey := host + "|" + c.proxyFor(account).key()
 
+	// The interstitial is served intermittently: a cookie that worked seconds ago
+	// can be refused, and the copy served on the API path may carry a stale nonce.
+	// Retry a couple of times, each time solving fresh from the site root.
+	const attempts = 3
 	var lastResp pluginapi.HTTPResponse
-	for attempt := 0; attempt < 2; attempt++ {
-		challenge := c.ensureChallenge(target, account)
+	for attempt := 0; attempt < attempts; attempt++ {
+		fresh := attempt > 0
+		challenge := c.ensureChallenge(target, account, fresh)
 		resp, errDo := c.do(pluginapi.HTTPRequest{
 			Method:  method,
 			URL:     target,
@@ -416,12 +459,16 @@ func (c *anyrouterClient) apiRequest(method, target string, account *Account, bo
 			return pluginapi.HTTPResponse{}, errDo
 		}
 		lastResp = resp
-		if attempt == 0 && c.cfg.ChallengeEnabled && looksLikeChallenge(string(resp.Body)) {
-			hostLogf("info", "响应为挑战页，重新获取 Cookie 后重试一次 (host=%s)", host)
-			challengeStore.invalidate(cacheKey)
-			continue
+		if !c.cfg.ChallengeEnabled || !looksLikeChallenge(string(resp.Body)) {
+			return resp, nil
 		}
-		return resp, nil
+		if attempt < attempts-1 {
+			hostLogf("info", "响应为挑战页，刷新挑战 Cookie 后重试（第 %d 次，host=%s）", attempt+1, host)
+			challengeStore.invalidate(cacheKey)
+			// Gentle backoff: the site challenges on request rate as well as on stale
+			// cookies, so hammering the retry would make it worse.
+			time.Sleep(time.Duration(400*(attempt+1)) * time.Millisecond)
+		}
 	}
 	return lastResp, nil
 }

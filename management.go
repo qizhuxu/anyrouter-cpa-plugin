@@ -190,6 +190,28 @@ func resourceMountInstanceID(raw string) string {
 
 var panelMountNotice sync.Once
 
+// resourceInstanceID remembers the instance id the host used, so the interactive
+// login flow can report the exact panel path instead of guessing the declared id.
+var resourceInstanceID struct {
+	mu    sync.RWMutex
+	value string
+}
+
+func rememberResourceInstanceID(id string) {
+	if id == "" {
+		return
+	}
+	resourceInstanceID.mu.Lock()
+	resourceInstanceID.value = id
+	resourceInstanceID.mu.Unlock()
+}
+
+func knownResourceInstanceID() string {
+	resourceInstanceID.mu.RLock()
+	defer resourceInstanceID.mu.RUnlock()
+	return resourceInstanceID.value
+}
+
 // noteResourceMount logs the effective panel URL once per process. Operators
 // usually discover the plugin through the host UI, which links the resource path
 // built from the instance id; printing it removes the guesswork.
@@ -198,6 +220,7 @@ func noteResourceMount(rawPath string) {
 	if instanceID == "" {
 		return
 	}
+	rememberResourceInstanceID(instanceID)
 	panelMountNotice.Do(func() {
 		hostLogf("info", "面板地址：/v0/resource/plugins/%s/panel（实例 id 由宿主决定；管理路由固定为 /v0/management%s/*）",
 			instanceID, pluginRoutePrefix)
@@ -619,7 +642,7 @@ func handleChallengeRefresh() managementResponse {
 	challengeStore.clear()
 	cfg := currentConfig()
 	client := newClient()
-	cookie := client.ensureChallenge(cfg.BaseURL+"/", nil)
+	cookie := client.ensureChallenge(cfg.BaseURL+"/", nil, true)
 	if cookie == "" {
 		recordEvent("warn", "challenge", "", "未能获取挑战 Cookie")
 		return jsonResponse(http.StatusBadGateway, map[string]any{

@@ -107,7 +107,7 @@ const panelShellBody = `<div class="app" id="app" data-need-key="1" data-key-ope
     <div class="field">
       <label for="f-cookie">登录凭证（Cookie）</label>
       <textarea id="f-cookie" spellcheck="false" placeholder="session=…"></textarea>
-      <div class="help">浏览器登录 AnyRouter 后，开发者工具 → 网络 → 任意请求 → 请求标头里的 Cookie 整条复制。</div>
+      <div class="help" id="cookieHelp">浏览器登录 AnyRouter 后，开发者工具 → 网络 → 任意请求 → 请求标头里的 Cookie 整条复制。</div>
     </div>
     <div class="grid2">
       <div class="field">
